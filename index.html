@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flowers</title>
+<style>
+  :root { --glow: 255, 105, 170; }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body { height: 100%; overflow: hidden; }
+
+  body {
+    background:
+      radial-gradient(ellipse 70% 45% at 50% 85%, rgba(25, 130, 125, .35), transparent 70%),
+      radial-gradient(ellipse 40% 35% at 50% 30%, rgba(var(--glow), .06), transparent 70%),
+      linear-gradient(#050a10, #07151b 60%, #04090d);
+  }
+
+  /* ---------- floating embers ---------- */
+  .ember {
+    position: fixed;
+    bottom: -10px;
+    border-radius: 50%;
+    opacity: 0;
+    animation: floatUp linear infinite;
+    pointer-events: none;
+  }
+  @keyframes floatUp {
+    0%   { transform: translate(0, 0) scale(.6); opacity: 0; }
+    10%  { opacity: .95; }
+    50%  { transform: translate(20px, -50vh) scale(1); }
+    100% { transform: translate(-14px, -105vh) scale(.5); opacity: 0; }
+  }
+
+  /* ---------- breathing flower glow ---------- */
+  .breathe { animation: breathe 7s ease-in-out infinite; }
+  @keyframes breathe { 0%, 100% { opacity: .65; } 50% { opacity: 1; } }
+
+  /* ---------- low mist drifting behind the flowers ---------- */
+  .mist {
+    position: fixed;
+    left: -20%; width: 140%; bottom: 0;
+    height: 36vh;
+    pointer-events: none;
+    filter: blur(22px);
+    background:
+      radial-gradient(ellipse 28% 55% at 22% 100%, rgba(90, 210, 195, .17), transparent 70%),
+      radial-gradient(ellipse 30% 50% at 55% 100%, rgba(90, 210, 195, .11), transparent 70%),
+      radial-gradient(ellipse 26% 55% at 84% 100%, rgba(90, 210, 195, .16), transparent 70%);
+    animation: mistDrift 38s ease-in-out infinite alternate;
+  }
+  .mist.m2 { height: 26vh; opacity: .7; animation-duration: 55s; animation-direction: alternate-reverse; }
+  @keyframes mistDrift { from { transform: translateX(-6%); } to { transform: translateX(6%); } }
+
+  /* ---------- fireflies: wander slowly + blink softly ---------- */
+  .firefly {
+    position: fixed;
+    border-radius: 50%;
+    pointer-events: none;
+    opacity: 0;
+    animation:
+      drift var(--dd) ease-in-out var(--dl) infinite,
+      blink var(--bd) ease-in-out var(--bl) infinite;
+  }
+  @keyframes drift {
+    0%   { transform: translate(0, 0); }
+    25%  { transform: translate(var(--x1), var(--y1)); }
+    50%  { transform: translate(var(--x2), var(--y2)); }
+    75%  { transform: translate(var(--x3), var(--y3)); }
+    100% { transform: translate(0, 0); }
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 0;   box-shadow: 0 0 2px 0 rgba(var(--fc), 0); }
+    35%, 65% { opacity: 1;   box-shadow: 0 0 10px 3px rgba(var(--fc), .75), 0 0 22px 8px rgba(var(--fc), .3); }
+  }
+
+  svg#field, svg#grass, svg#grassBack {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  svg#field     { filter: drop-shadow(0 0 8px rgba(70, 220, 200, .28)); }
+  svg#grass     { pointer-events: none; filter: drop-shadow(0 0 4px rgba(110, 255, 160, .35)); }
+  svg#grassBack { pointer-events: none; opacity: .8; filter: drop-shadow(0 0 3px rgba(60, 200, 150, .25)); }
+
+  /* ---------- growth keyframes (the wind is done in JS) ---------- */
+  @keyframes popS  { to { transform: scale(1); } }
+  @keyframes growY { to { transform: scaleY(1); } }
+
+  @keyframes draw {
+    from { stroke-dashoffset: 1; opacity: 0; }
+    3%   { opacity: 1; }
+    to   { stroke-dashoffset: 0; opacity: 1; }
+  }
+  @keyframes openL {
+    from { transform: rotate(35deg) scale(.2);  opacity: 0; }
+    to   { transform: rotate(0deg) scale(1);    opacity: 1; }
+  }
+  @keyframes openR {
+    from { transform: rotate(-35deg) scale(.2); opacity: 0; }
+    to   { transform: rotate(0deg) scale(1);    opacity: 1; }
+  }
+  @keyframes popC {
+    from { transform: scale(.2); opacity: 0; }
+    to   { transform: scale(1);  opacity: 1; }
+  }
+
+  /* ---------- stems & leaves (grow from their own base point) ---------- */
+  .stem {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    opacity: 0;
+    animation: draw var(--sd, .9s) cubic-bezier(.3, .1, .2, 1) var(--s) both;
+  }
+
+  .leaf {
+    transform: scale(0);
+    transform-box: view-box;
+    transform-origin: 0 0;
+    animation: popS .7s cubic-bezier(.34, 1.4, .64, 1) var(--d) forwards;
+  }
+
+  /* ---------- flower parts: fully hidden until their turn ---------- */
+  .pl, .pr, .pc, .stm, .halo {
+    opacity: 0;
+    transform-box: fill-box;
+    animation-duration: .65s;
+    animation-timing-function: cubic-bezier(.34, 1.56, .64, 1);
+    animation-delay: var(--d);
+    animation-fill-mode: both;
+  }
+  .pl   { transform-origin: 100% 100%; animation-name: openL; }
+  .pr   { transform-origin: 0% 100%;   animation-name: openR; }
+  .pc   { transform-origin: 50% 100%;  animation-name: popC; }
+  .stm  { transform-origin: 50% 100%;  animation-name: popC; }
+  .halo { transform-origin: 50% 50%;   animation-name: popC; animation-duration: 1s; }
+
+  /* ---------- grass growth ---------- */
+  .gb {
+    transform: scaleY(0);
+    transform-box: view-box;
+    transform-origin: 0 0;
+    animation: growY .9s cubic-bezier(.3, 1.2, .5, 1) var(--gd) forwards;
+  }
+
+  /* ---------- no intro animation (used when the window is resized) ---------- */
+  .still .stem { animation: none; stroke-dashoffset: 0; opacity: 1; }
+  .still .leaf, .still .gb { animation: none; transform: none; }
+  .still .pl, .still .pr, .still .pc, .still .stm, .still .halo { animation: none; opacity: 1; transform: none; }
+</style>
+</head>
+<body>
+
+<svg id="grassBack" aria-hidden="true"></svg>
+<div class="mist"></div>
+<div class="mist m2"></div>
+<svg id="field" aria-label="Flowers growing and swaying in the wind"></svg>
+<svg id="grass" aria-hidden="true"></svg>
+
+<script>
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const f1 = n => n.toFixed(1);
+
+  // ============================================================
+  //  SETTINGS
+  // ============================================================
+  const FLOWER_COLOR = "pink";   // "pink" or "white"
+  const WIND = 1;                // 0 = no wind, 1 = gentle, 1.5 = windy
+  const FIREFLIES = 9;           // 0 = none
+
+  const palettes = {
+    pink:  { tip: "#ff4f93", mid: "#ff9ec7", base: "#fff0f5", backTip: "#d62f78", backBase: "#ffc7dd",
+             glow: "255,105,170", stamen: "#ffe08a", embers: ["255,150,200", "255,110,170", "120,255,220"] },
+    white: { tip: "#dfe9ff", mid: "#ffffff", base: "#fff6d9", backTip: "#8ea3d6", backBase: "#e4ecff",
+             glow: "200,220,255", stamen: "#ffd86b", embers: ["230,240,255", "255,240,200", "120,255,220"] }
+  };
+  const P = palettes[FLOWER_COLOR];
+  document.documentElement.style.setProperty("--glow", P.glow);
+
+  const field = document.getElementById("field");
+  const grass = document.getElementById("grass");
+  const grassBack = document.getElementById("grassBack");
+
+  // ============================================================
+  //  Bezier helpers
+  // ============================================================
+  function bez(pts, t) {
+    let p = pts;
+    while (p.length > 1) {
+      const n = [];
+      for (let i = 0; i < p.length - 1; i++)
+        n.push([(1 - t) * p[i][0] + t * p[i + 1][0], (1 - t) * p[i][1] + t * p[i + 1][1]]);
+      p = n;
+    }
+    return p[0];
+  }
+  function tangentAng(pts, t) {
+    const a = bez(pts, Math.max(0, t - .01)), b = bez(pts, Math.min(1, t + .01));
+    return Math.atan2(b[0] - a[0], -(b[1] - a[1])) * 180 / Math.PI;
+  }
+  const pt2 = a => `${f1(a[0])} ${f1(a[1])}`;
+  const stemPath = pts => `M${pt2(pts[0])} C${pt2(pts[1])} ${pt2(pts[2])} ${pt2(pts[3])}`;
+
+  // ============================================================
+  //  LEAF TYPE 1: long arching strap leaf
+  // ============================================================
+  function strap(bx, ang, Ls, grad, delay, xv) {
+    const dirS = ang === 0 ? 1 : Math.sign(ang);
+    const bend = dirS * Ls * rnd(.22, .4);
+    const C0 = [0, 0], C1 = [0, -Ls * .55], C2 = [bend, -Ls * .92];
+    const wmax = Ls * rnd(.065, .085);
+    const pt = t => [(1-t)*(1-t)*C0[0] + 2*(1-t)*t*C1[0] + t*t*C2[0],
+                     (1-t)*(1-t)*C0[1] + 2*(1-t)*t*C1[1] + t*t*C2[1]];
+    const dv = t => [2*(1-t)*(C1[0]-C0[0]) + 2*t*(C2[0]-C1[0]),
+                     2*(1-t)*(C1[1]-C0[1]) + 2*t*(C2[1]-C1[1])];
+    const left = [], right = [], mid = [];
+    const n = 14;
+    for (let k = 0; k <= n; k++) {
+      const t = k / n, c = pt(t), d = dv(t), len = Math.hypot(d[0], d[1]) || 1;
+      const nx = -d[1] / len, ny = d[0] / len;
+      const wp = wmax * (Math.sin(Math.PI * Math.pow(t, .75)) * .85 + .15 * (1 - t));
+      left.push([c[0] + nx * wp, c[1] + ny * wp]);
+      right.push([c[0] - nx * wp, c[1] - ny * wp]);
+      mid.push(c);
+    }
+    const line = (a, first) => a.map((p, i) => (i === 0 && first ? "M" : "L") + pt2(p)).join(" ");
+    const full = line(left, true) + " " + line(right.slice().reverse(), false) + " Z";
+    const fold = line(left, true) + " " + line(mid.slice().reverse(), false) + " Z";
+    const rib  = line(mid, true);
+
+    return `<g transform="translate(${f1(bx)} 0) rotate(${f1(ang)})">
+      <g data-w="0,0,${f1(rnd(3, 5))},${f1(xv)},${f1(rnd(.05, .25))}">
+        <g class="leaf" style="--d:${delay.toFixed(2)}s">
+          <path d="${full}" fill="url(#leaf${grad})"/>
+          <path d="${fold}" fill="#d5fff6" fill-opacity=".1"/>
+          <path d="${rib}" stroke="#d5fff6" stroke-opacity=".28" stroke-width="1.1" fill="none" stroke-linecap="round"/>
+        </g>
+      </g>
+    </g>`;
+  }
+
+  // ============================================================
+  //  LEAF TYPE 2: slim lance leaf on the flower stalk
+  // ============================================================
+  function lance(x, y, ang, L, grad, delay, xv, sg, gl = 0) {
+    const w    = L * rnd(.2, .27);
+    const pet  = L * .06;
+    const bend = -sg * L * rnd(.05, .14);
+    const b = -pet, T = -pet - L;
+    const d = `M0 ${f1(b)} C${f1(-w)} ${f1(b - L*.22)} ${f1(-w*.6 + bend)} ${f1(b - L*.78)} ${f1(bend)} ${f1(T)} ` +
+              `C${f1(w*.6 + bend)} ${f1(b - L*.78)} ${f1(w)} ${f1(b - L*.22)} 0 ${f1(b)} Z`;
+    return `<g transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(ang)})">
+      <g data-w="0,0,${f1(rnd(3, 6))},${f1(xv)},${f1(rnd(.1, .3))}">
+        <g class="leaf" style="--d:${delay.toFixed(2)}s">
+          <path d="M0 0 L0 ${f1(b)}" stroke="#1c8f8a" stroke-width="1.6" stroke-linecap="round"/>
+          <path d="${d}" fill="url(#leaf${grad})"/>
+          <path d="${d}" fill="url(#leafGlow)" opacity="${(gl * 1.6).toFixed(2)}"/>
+          <path d="M0 ${f1(b)} Q${f1(bend*.3)} ${f1(b - L*.5)} ${f1(bend*.9)} ${f1(T + L*.08)}"
+                stroke="#d5fff6" stroke-opacity=".35" stroke-width="1" fill="none" stroke-linecap="round"/>
+        </g>
+      </g>
+    </g>`;
+  }
+
+  // ============================================================
+  //  FLOWER HEAD
+  // ============================================================
+  function headSVG(ex, ey, k, tilt, b, xv) {
+    const dl = o => (b + o).toFixed(2);
+    let stamens = "";
+    [[-14, -48], [-7, -56], [0, -60], [7, -56], [14, -48]].forEach(([tx, ty]) => {
+      stamens += `<line x1="0" y1="-4" x2="${tx}" y2="${ty}" stroke="${P.stamen}" stroke-width="1.4" stroke-linecap="round"/>
+                  <circle cx="${tx}" cy="${ty}" r="2.3" fill="${P.stamen}"/>`;
+    });
+    return `
+      <g data-w="${f1(ex)},${f1(ey)},4,${f1(xv)},0.3">
+        <g transform="translate(${f1(ex)} ${f1(ey)})">
+          <g transform="rotate(${f1(tilt)}) scale(${k.toFixed(2)})">
+            <g class="breathe" style="animation-delay:-${rnd(0, 7).toFixed(1)}s"><circle class="halo" style="--d:${dl(0)}s" cx="0" cy="-36" r="72" fill="url(#halo)"/></g>
+            <g class="pl" style="--d:${dl(0)}s"><path d="M0 0 C-22 -6 -40 -30 -38 -58 C-22 -48 -8 -28 0 0 Z" fill="url(#pBack)"/></g>
+            <g class="pr" style="--d:${dl(0)}s"><path d="M0 0 C22 -6 40 -30 38 -58 C22 -48 8 -28 0 0 Z" fill="url(#pBack)"/></g>
+            <g class="pc" style="--d:${dl(0.1)}s"><path d="M0 0 C-16 -10 -18 -46 0 -72 C18 -46 16 -10 0 0 Z" fill="url(#pFront)"/></g>
+            <g class="stm" style="--d:${dl(0.3)}s">${stamens}</g>
+            <g class="pl" style="--d:${dl(0.2)}s"><path d="M0 4 C-30 4 -52 -14 -50 -38 C-30 -36 -10 -22 0 4 Z" fill="url(#pFront)" stroke="${P.tip}" stroke-opacity=".35" stroke-width=".8"/></g>
+            <g class="pr" style="--d:${dl(0.2)}s"><path d="M0 4 C30 4 52 -14 50 -38 C30 -36 10 -22 0 4 Z" fill="url(#pFront)" stroke="${P.tip}" stroke-opacity=".35" stroke-width=".8"/></g>
+          </g>
+        </g>
+      </g>`;
+  }
+
+  // ============================================================
+  //  ONE PLANT (px = screen x, s = pixels per design unit)
+  // ============================================================
+  function plantSVG(px, s, H, cfg) {
+    const { n, t0 } = cfg;
+    const X = lx => px + lx * s;
+    let g = `<g transform="translate(${f1(px)} ${f1(H + 4)}) scale(${s.toFixed(3)})">`;
+
+    // --- strap leaves around the base: half behind the stalks, half in front ---
+    const nb = n === 3 ? 7 : 5;
+    let back = "", front = "";
+    for (let i = 0; i < nb; i++) {
+      const a  = -70 + 140 * i / (nb - 1) + rnd(-7, 7);
+      const Ls = (105 + 95 * (1 - Math.abs(a) / 75)) * rnd(.85, 1.1);
+      const bx = a * .08 + rnd(-3, 3);
+      const xv = X(bx + Math.sin(a * Math.PI / 180) * Ls * .5);
+      const svg = strap(bx, a, Ls, i % 2 ? "A" : "B", t0 + .05 + i * .05, xv);
+      if (i % 2 === 0) back += svg; else front += svg;
+    }
+    g += back;
+
+    // --- flower stalks ---
+    const thetas  = n === 3 ? [-15, 1, 15] : n === 2 ? [-9, 11] : [rnd(-4, 4)];
+    const heights = n === 3 ? [350, 440, 375] : n === 2 ? [370, 420] : [420];
+    const sizes   = n === 3 ? [.95, 1.1, 1] : [1, 1.08, 1];
+
+    for (let i = 0; i < n; i++) {
+      const th = thetas[i] * Math.PI / 180;
+      const h  = heights[i] * rnd(.92, 1.08);
+      const ex = h * Math.sin(th) * 1.1, ey = -h * Math.cos(th);
+      const pts = [[0, 0], [ex * .1, -h * .35], [ex * .7, -h * .72], [ex, ey]];
+      const sS = t0 + .1 + i * .1, sd = .95;
+      const b  = sS + sd;                                   // bloom starts once the stalk reaches the top
+
+      g += `<g data-w="0,0,${f1(rnd(2.2, 3))},${f1(X(ex))},0">`;
+      g += `<path class="stem" style="--s:${sS.toFixed(2)}s;--sd:${sd}s" pathLength="1" d="${stemPath(pts)}"
+              fill="none" stroke="#2fb5a3" stroke-width="3.2" stroke-linecap="round"/>`;
+
+      [0.16, 0.27, 0.38, 0.49, 0.60, 0.71].forEach((t0l, j) => {
+        const t  = t0l + rnd(-.025, .025);
+        const tn = (t - .16) / .55;
+        const [x, y] = bez(pts, t);
+        const tan = tangentAng(pts, t);
+        const L  = (48 - 18 * tn) * rnd(.9, 1.1);
+        const sg = (j + i) % 2 ? 1 : -1;
+        const spread = (36 - 10 * tn) + rnd(-6, 6);
+        g += lance(x, y, tan + sg * spread, L, j % 2 ? "A" : "B", sS + sd * t * .85 + .1, X(x), sg, .04 + .22 * tn);
+      });
+
+      g += headSVG(ex, ey, sizes[i] * rnd(.97, 1.05), thetas[i] * 1.6, b, X(ex));
+      g += `</g>`;
+    }
+
+    g += front;
+    return g + `</g>`;
+  }
+
+  // ============================================================
+  //  GRASS: two layers of thin, arching blades
+  //  (dark back layer behind the flowers, dense low layer in front)
+  // ============================================================
+  function blade(x, h, lean, w, set, amp, gd, H) {
+    const tip = [lean, -h];
+    const cL1 = [-w/2 + lean*.08, -h*.45], cL2 = [-w*.3 + lean*.65, -h*.82];
+    const cR1 = [ w/2 + lean*.08, -h*.45], cR2 = [ w*.3 + lean*.65, -h*.82];
+    const cM1 = [lean*.1, -h*.45],         cM2 = [lean*.68, -h*.82];
+    const left  = `M${f1(-w/2)} 2 C${pt2(cL1)} ${pt2(cL2)} ${pt2(tip)} C${pt2(cM2)} ${pt2(cM1)} 0 2 Z`;
+    const right = `M0 2 C${pt2(cM1)} ${pt2(cM2)} ${pt2(tip)} C${pt2(cR2)} ${pt2(cR1)} ${f1(w/2)} 2 Z`;
+    return `<g transform="translate(${f1(x)} ${H + 2})">
+      <g data-w="0,0,${f1(amp)},${f1(x)},0">
+        <g class="gb" style="--gd:${gd.toFixed(2)}s">
+          <path d="${left}"  fill="url(#g${set}L)"/>
+          <path d="${right}" fill="url(#g${set}R)"/>
+        </g>
+      </g>
+    </g>`;
+  }
+
+  function clumps(W, H, o) {
+    const blades = [];
+    const nC = Math.round(W / o.gap);
+    for (let c = 0; c < nC; c++) {
+      const cx = (c + rnd(.1, .9)) * W / nC;
+      const dc = Math.abs(cx - W / 2) / (W / 2);           // 0 center, 1 edges
+      let hB = H * (o.low + o.rise * Math.pow(dc, 1.6)) * rnd(.8, 1.2);
+      if (Math.random() < .08) hB *= 1.35;                 // occasional tall tuft
+      hB = Math.min(hB, H * .34);                          // cap so edges don't tower
+      const n = Math.round(rnd(o.nMin, o.nMax));
+      const spread = 14 + hB * .14;
+      for (let i = 0; i < n; i++) {
+        const dx = rnd(-spread, spread);
+        const h = hB * (1 - .4 * Math.abs(dx) / spread) * rnd(.7, 1.1);
+        const lean = (dx / spread) * hB * .16 + rnd(-.07, .07) * hB;
+        const w = 2.2 + h * .01 * rnd(.8, 1.2);            // thin blades
+        blades.push({ x: cx + dx, h, lean, w, set: o.sets[Math.floor(Math.random() * o.sets.length)] });
+      }
+    }
+    return blades.sort((a, b) => b.h - a.h);               // tall ones behind
+  }
+
+  function buildGrass(W, H) {
+    const grad = (id, a, b) =>
+      `<linearGradient id="${id}" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient>`;
+    const defs = `<defs>
+      ${grad("gAL", "#0b4d2d", "#2f9e55")}${grad("gAR", "#17803f", "#9be25f")}
+      ${grad("gBL", "#0a4a44", "#2aa58a")}${grad("gBR", "#137a63", "#86e6b8")}
+      ${grad("gCL", "#14612f", "#6fc24a")}${grad("gCR", "#2b8a3a", "#c7f27a")}
+      ${grad("gDL", "#06251f", "#13574a")}${grad("gDR", "#0a3a30", "#1f7a63")}
+      ${grad("gEL", "#082a1c", "#1c5a38")}${grad("gER", "#0e3d27", "#2b7a4a")}
+    </defs>`;
+
+    const render = list => list.map(b =>
+      blade(b.x, b.h, b.lean, b.w, b.set, 2.5 + 7 * (b.h / H), rnd(0, .9), H)).join("");
+
+    // back layer: darker, taller, sits behind the flowers
+    grassBack.innerHTML = render(clumps(W, H, {
+      gap: 24, low: .15, rise: .16, nMin: 4, nMax: 7, sets: ["D", "E"]
+    }));
+
+    // front layer: dense and low so the ground is always covered
+    grass.innerHTML = defs + render(clumps(W, H, {
+      gap: 30, low: .09, rise: .17, nMin: 3, nMax: 6, sets: ["A", "B", "C"]
+    }));
+  }
+
+  // ============================================================
+  //  BUILD THE WHOLE SCENE (fills the screen width with plants)
+  // ============================================================
+  let items = [];
+  let lastW = 0, lastH = 0;
+
+  function buildField(W, H) {
+    const s0 = Math.min(H * .72 / 520, W * .40 / 150);          // size of the center plant
+    const m  = 0;                                               // 0 = only the center plant (3 flowers)
+    const N  = 2 * m + 1;
+
+    const plants = [];
+    for (let j = 0; j < N; j++) {
+      const rank = Math.abs(j - m);
+      const x = W * (j + 1) / (N + 1) + (rank ? rnd(-.015, .015) * W : 0);
+      const f = rank === 0 ? 1 : Math.max(.48, rnd(.62, .8) - rank * .07);
+      plants.push({ x, s: s0 * f, rank, n: rank === 0 ? 3 : (Math.random() < .5 ? 2 : 3),
+                    t0: .3 + rank * .25 + rnd(0, .08) });
+    }
+    plants.sort((a, b) => b.rank - a.rank);                     // outer (smaller) plants first, center last
+
+    let html = `
+    <defs>
+      <linearGradient id="leafA" x1="0" y1="1" x2="0" y2="0">
+        <stop offset="0" stop-color="#0b4f5c"/><stop offset="1" stop-color="#52d9c8"/>
+      </linearGradient>
+      <linearGradient id="leafB" x1="0" y1="1" x2="0" y2="0">
+        <stop offset="0" stop-color="#0f6a70"/><stop offset="1" stop-color="#7cf0dc"/>
+      </linearGradient>
+      <linearGradient id="pFront" x1="0" y1="1" x2="0" y2="0">
+        <stop offset="0" stop-color="${P.base}"/><stop offset=".45" stop-color="${P.mid}"/><stop offset="1" stop-color="${P.tip}"/>
+      </linearGradient>
+      <linearGradient id="pBack" x1="0" y1="1" x2="0" y2="0">
+        <stop offset="0" stop-color="${P.backBase}"/><stop offset="1" stop-color="${P.backTip}"/>
+      </linearGradient>
+      <radialGradient id="halo">
+        <stop offset="0" stop-color="rgb(${P.glow})" stop-opacity=".5"/>
+        <stop offset="1" stop-color="rgb(${P.glow})" stop-opacity="0"/>
+      </radialGradient>
+      <linearGradient id="leafGlow" x1="0" y1="1" x2="0" y2="0">
+        <stop offset="0" stop-color="rgb(${P.glow})" stop-opacity="0"/><stop offset="1" stop-color="rgb(${P.glow})" stop-opacity="1"/>
+      </linearGradient>
+      <linearGradient id="groundG" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#0c3b36" stop-opacity="0"/><stop offset="1" stop-color="#0c3b36" stop-opacity=".7"/>
+      </linearGradient>
+    </defs>
+    <rect x="0" y="${f1(H * .8)}" width="${W}" height="${f1(H * .2)}" fill="url(#groundG)"/>`;
+
+    plants.forEach(p => html += plantSVG(p.x, p.s, H, p));
+    field.innerHTML = html;
+  }
+
+  function build(animate) {
+    const W = window.innerWidth, H = window.innerHeight;
+    lastW = W; lastH = H;
+    for (const el of [field, grass, grassBack]) {
+      el.setAttribute("viewBox", `0 0 ${W} ${H}`);
+      el.classList.toggle("still", !animate);
+    }
+    buildField(W, H);
+    buildGrass(W, H);
+
+    items = [...field.querySelectorAll("[data-w]"),
+             ...grass.querySelectorAll("[data-w]"),
+             ...grassBack.querySelectorAll("[data-w]")].map(el => {
+      const [cx, cy, amp, xv, lag] = el.dataset.w.split(",").map(Number);
+      return { el, cx, cy, amp, xv, lag, j: rnd(-.03, .03), ph: rnd(0, 6.28), fs: rnd(1.5, 3) };
+    });
+  }
+  build(true);
+
+  let resizeTimer;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (Math.abs(window.innerWidth - lastW) > 40 || Math.abs(window.innerHeight - lastH) > 120) build(false);
+    }, 250);
+  });
+
+  // ============================================================
+  //  WIND: one gentle wind that travels across the screen,
+  //  so grass, leaves, stalks and flower heads lean together
+  // ============================================================
+  function wind(t, X) {
+    const gust = 0.5 + 0.5 * Math.sin(t * 0.23);
+    const wave = 0.6  * Math.sin(t * 1.1  - X * 4.0)
+               + 0.25 * Math.sin(t * 2.3  - X * 6.0 + 1.3)
+               + 0.35 * Math.sin(t * 0.45 - X * 2.0);
+    return (0.25 + 0.75 * gust) * (0.45 + wave);
+  }
+
+  // people with "reduce motion" on still get a softer sway (never none)
+  const AMT = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0.5 : 1;
+  const t0 = performance.now();
+
+  function frame(now) {
+    const t = (now - t0) / 1000;
+    const r = Math.min(1, Math.max(0, (t - 1.0) / 1.5));
+    const ramp = r * r * (3 - 2 * r) * WIND * AMT;               // wind eases in during the intro
+    const W = window.innerWidth;
+
+    for (const it of items) {
+      const X = it.xv / W + it.j;
+      const a = (wind(t - it.lag, X) * it.amp + Math.sin(t * it.fs + it.ph) * it.amp * 0.18) * ramp;
+      it.el.setAttribute("transform", `rotate(${a.toFixed(2)} ${it.cx} ${it.cy})`);
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // ============================================================
+  //  EMBERS
+  // ============================================================
+  for (let i = 0; i < 24; i++) {
+    const e = document.createElement("span");
+    e.className = "ember";
+    const c = P.embers[Math.floor(Math.random() * P.embers.length)];
+    const size = rnd(2.5, 6);
+    e.style.cssText = `left:${rnd(5, 95)}vw;width:${size}px;height:${size}px;` +
+      `background:rgba(${c},.95);box-shadow:0 0 10px rgba(${c},.9);` +
+      `animation-duration:${rnd(9, 19)}s;animation-delay:${rnd(2, 14)}s`;
+    document.body.appendChild(e);
+  }
+
+  // ============================================================
+  //  FIREFLIES: warm little lights that wander and blink on their own rhythm
+  // ============================================================
+  const FIREFLY_COLORS = ["255,240,140", "200,255,130", "255,225,120"];
+  for (let i = 0; i < FIREFLIES; i++) {
+    const e = document.createElement("span");
+    e.className = "firefly";
+    const size = rnd(3, 5.5);
+    const c = FIREFLY_COLORS[Math.floor(Math.random() * FIREFLY_COLORS.length)];
+    const reach = () => `${rnd(-60, 60).toFixed(0)}px`;
+    e.style.cssText =
+      `left:${(Math.random() < .72 ? (Math.random() < .5 ? rnd(3, 26) : rnd(74, 97)) : rnd(30, 70)).toFixed(1)}vw;top:${rnd(35, 88).toFixed(1)}vh;` +
+      `width:${size.toFixed(1)}px;height:${size.toFixed(1)}px;` +
+      `background:rgb(${c});--fc:${c};` +
+      `--x1:${reach()};--y1:${reach()};--x2:${reach()};--y2:${reach()};--x3:${reach()};--y3:${reach()};` +
+      `--dd:${rnd(14, 28).toFixed(1)}s;--dl:${rnd(0, 6).toFixed(1)}s;` +
+      `--bd:${rnd(2.4, 5).toFixed(1)}s;--bl:${rnd(1, 8).toFixed(1)}s`;
+    document.body.appendChild(e);
+  }
+</script>
+</body>
+</html>
